@@ -1,0 +1,285 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Question</title>
+  <style>
+    :root { color-scheme: light; }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      background: #f6f7fb;
+    }
+
+    a#openLink {
+      font-size: 18px;
+      text-decoration: none;
+      padding: 12px 16px;
+      border-radius: 12px;
+      background: #111;
+      color: #fff;
+      box-shadow: 0 10px 30px rgba(0,0,0,.12);
+    }
+
+    .backdrop {
+      position: fixed;
+      inset: 0;
+      display: none;
+      place-items: center;
+      background: rgba(0,0,0,.45);
+      padding: 18px;
+    }
+    .backdrop[aria-hidden="false"] { display: grid; }
+
+    .modal {
+      width: min(520px, 100%);
+      background: #fff;
+      border-radius: 18px;
+      box-shadow: 0 20px 60px rgba(0,0,0,.25);
+      overflow: hidden;
+    }
+
+    .header {
+      padding: 18px 18px 0 18px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .close {
+      border: 0;
+      background: transparent;
+      font-size: 22px;
+      cursor: pointer;
+      padding: 6px 10px;
+      border-radius: 10px;
+    }
+    .close:focus-visible { outline: 3px solid #c7d2fe; outline-offset: 2px; }
+
+    .content { padding: 10px 18px 18px 18px; }
+
+    .question {
+      font-size: 28px;
+      margin: 10px 0 6px;
+      letter-spacing: .2px;
+    }
+
+    .hint {
+      margin: 0 0 14px;
+      color: #555;
+      font-size: 14px;
+    }
+
+    .arena {
+      position: relative;
+      height: 220px;
+      border-radius: 14px;
+      background: #f3f4f6;
+      overflow: hidden;
+      border: 1px solid #ffa7e2;
+    }
+
+    .btn {
+      border: 0;
+      cursor: pointer;
+      padding: 12px 18px;
+      border-radius: 14px;
+      font-weight: 700;
+      font-size: 16px;
+      user-select: none;
+      touch-action: manipulation;
+    }
+    .btn:focus-visible { outline: 3px solid #ff91f8; outline-offset: 2px; }
+
+    .yes {
+      background: #16a34a;
+      color: white;
+      position: absolute;
+      left: 22px;
+      bottom: 22px;
+    }
+
+    /* Smooth-dodge No button */
+    .no {
+      background: #ef4444;
+      color: white;
+
+      position: absolute;
+      left: 22px;
+      top: 22px;
+
+      transition: transform 220ms ease-out;
+      will-change: transform;
+    }
+
+    .toast {
+      margin-top: 14px;
+      display: none;
+      padding: 12px 14px;
+      border-radius: 14px;
+      background: #ecfdf5;
+      border: 1px solid #bbf7d0;
+      color: #065f46;
+      font-weight: 650;
+    }
+    .toast[aria-hidden="false"] { display: block; }
+  </style>
+</head>
+
+<body>
+  <a id="openLink" href="#" role="button">Open link</a>
+
+  <div class="backdrop" id="backdrop" aria-hidden="true">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="qTitle">
+      <div class="header">
+        <div style="font-weight:800">A quick question</div>
+        <button class="close" id="closeBtn" aria-label="Close">×</button>
+      </div>
+
+      <div class="content">
+        <h1 class="question" id="qTitle">Do you love me?</h1>
+        <p class="hint">Choose wisely 😄</p>
+
+        <div class="arena" id="arena">
+          <button class="btn yes" id="yesBtn" type="button">Yes</button>
+          <button class="btn no" id="noBtn" type="button">No</button>
+        </div>
+
+        <div class="toast" id="toast" aria-hidden="true">
+          ❤️ Aww poopy I love you too.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    (() => {
+      const openLink = document.getElementById("openLink");
+      const backdrop = document.getElementById("backdrop");
+      const closeBtn = document.getElementById("closeBtn");
+      const arena = document.getElementById("arena");
+      const yesBtn = document.getElementById("yesBtn");
+      const noBtn = document.getElementById("noBtn");
+      const toast = document.getElementById("toast");
+
+      // Fail fast if IDs don't match (most common copy/paste issue)
+      if (!openLink || !backdrop || !closeBtn || !arena || !yesBtn || !noBtn || !toast) {
+        alert("Setup error: missing an element ID. Make sure you pasted the full file.");
+        return;
+      }
+
+      let offsetX = 0;
+      let offsetY = 0;
+
+      function clamp(n, min, max) {
+        return Math.max(min, Math.min(max, n));
+      }
+
+      function randomInt(min, max) {
+        return Math.floor(Math.random() * (max - min + 1)) + min;
+      }
+
+      function openModal() {
+        backdrop.setAttribute("aria-hidden", "false");
+        toast.setAttribute("aria-hidden", "true");
+        resetNo();
+        requestAnimationFrame(() => yesBtn.focus());
+      }
+
+      function closeModal() {
+        backdrop.setAttribute("aria-hidden", "true");
+        openLink.focus();
+      }
+
+      function resetNo() {
+        offsetX = 0;
+        offsetY = 0;
+        noBtn.style.transform = `translate(${offsetX}px, ${offsetY}px)`;
+      }
+
+      function pointerNearNoButton(clientX, clientY) {
+        const btn = noBtn.getBoundingClientRect();
+        const cx = clamp(clientX, btn.left, btn.right);
+        const cy = clamp(clientY, btn.top, btn.bottom);
+        const dx = clientX - cx;
+        const dy = clientY - cy;
+        return Math.hypot(dx, dy) < 70;
+      }
+
+      function dodgeSmooth() {
+        const padding = 12;
+        const arenaW = arena.clientWidth;
+        const arenaH = arena.clientHeight;
+
+        const btnW = noBtn.offsetWidth;
+        const btnH = noBtn.offsetHeight;
+
+        // Base anchor is (left:22, top:22)
+        const baseLeft = 22;
+        const baseTop = 22;
+
+        const minX = padding - baseLeft;
+        const minY = padding - baseTop;
+        const maxX = (arenaW - btnW - padding) - baseLeft;
+        const maxY = (arenaH - btnH - padding) - baseTop;
+
+        // If arena is too small, don't break
+        const safeMinX = Math.min(minX, maxX);
+        const safeMaxX = Math.max(minX, maxX);
+        const safeMinY = Math.min(minY, maxY);
+        const safeMaxY = Math.max(minY, maxY);
+
+        let newX = randomInt(Math.floor(safeMinX), Math.floor(safeMaxX));
+        let newY = randomInt(Math.floor(safeMinY), Math.floor(safeMaxY));
+
+        // Avoid tiny moves
+        if (Math.hypot(newX - offsetX, newY - offsetY) < 60) {
+          newX = randomInt(Math.floor(safeMinX), Math.floor(safeMaxX));
+          newY = randomInt(Math.floor(safeMinY), Math.floor(safeMaxY));
+        }
+
+        offsetX = newX;
+        offsetY = newY;
+
+        noBtn.style.transform = `translate(${offsetX}px, ${offsetY}px)`;
+      }
+
+      openLink.addEventListener("click", (e) => {
+        e.preventDefault();
+        openModal();
+      });
+
+      closeBtn.addEventListener("click", closeModal);
+
+      backdrop.addEventListener("click", (e) => {
+        if (e.target === backdrop) closeModal();
+      });
+
+      window.addEventListener("keydown", (e) => {
+        if (e.key === "Escape" && backdrop.getAttribute("aria-hidden") === "false") {
+          closeModal();
+        }
+      });
+
+      yesBtn.addEventListener("click", () => {
+        toast.setAttribute("aria-hidden", "false");
+      });
+
+      // Dodge triggers (mouse + touch pens)
+      noBtn.addEventListener("pointerenter", dodgeSmooth);
+      arena.addEventListener("pointermove", (e) => {
+        if (pointerNearNoButton(e.clientX, e.clientY)) dodgeSmooth();
+      });
+
+      // If they manage to click it anyway 😄
+      noBtn.addEventListener("click", dodgeSmooth);
+    })();
+  </script>
+</body>
+</html>
